@@ -1,0 +1,108 @@
+1. Develop a database for course management. The database contains the following entities:
+  a. students: student_no, teacher_no, course_no, student_name, email, birth_date.
+  b. teachers: teacher_no, teacher_name, phone_no
+  c. courses: course_no, course_name, start_date, end_date.
+  ● Partition by years, students table by birth_date field using the range mechanism
+  ● In the students table, make a primary key in combination of two fields student_no and birth_date
+  ● Create an index on the field students.email
+  ● Create a unique index on the field teachers.phone_no
+2. At your discretion, add test data (7-10 lines) to our three tables.
+3. Display data for any year from the students table and fix the query execution plan as a comment, where it will be seen that the query will be executed on a specific section.
+4. Display the teacher's data for any one phone number and fix the query execution plan, where it will be seen that the query will be executed by index, and not by the ALL method. Next, make the index from the teachers.phone_no field invisible and fix the query execution plan, where the expected result is the ALL method. As a result, leave the index in the visible status.
+5. Specially make 3 duplicates in the students table (add 3 more identical rows)
+
+CREATE DATABASE course;
+
+CREATE TABLE students (
+student_no INT AUTO_INCREMENT NOT NULL,
+teacher_no CHAR(4) NOT NULL ,
+course_no CHAR(4) NOT NULL ,
+student_name VARCHAR(30) NOT NULL,
+email VARCHAR(20) NOT NULL,
+birth_date DATE NOT NULL,
+CONSTRAINT PK_Person PRIMARY KEY (student_no,birth_date))
+PARTITION BY RANGE (year(birth_date)) ( 
+    PARTITION p0 VALUES LESS THAN (1985),
+    PARTITION p1 VALUES LESS THAN (1986),
+    PARTITION p2 VALUES LESS THAN (1987),
+    PARTITION p3 VALUES LESS THAN (1988),
+    PARTITION p4 VALUES LESS THAN (1989),
+    PARTITION p5 VALUES LESS THAN (1990),
+    PARTITION p6 VALUES LESS THAN (1991),
+    PARTITION p7 VALUES LESS THAN (1992),
+    PARTITION p8 VALUES LESS THAN (1993),
+    PARTITION p9 VALUES LESS THAN (1994),
+    PARTITION p10 VALUES LESS THAN (1995),
+    PARTITION p11 VALUES LESS THAN (1996),
+    PARTITION p12 VALUES LESS THAN (1997),
+    PARTITION p13 VALUES LESS THAN (1998),
+    PARTITION p14 VALUES LESS THAN (1999),
+    PARTITION p15 VALUES LESS THAN (2000),
+    PARTITION p16 VALUES LESS THAN (2001),
+    PARTITION p17 VALUES LESS THAN (2002),
+    PARTITION p18 VALUES LESS THAN (2003),
+    PARTITION p19 VALUES LESS THAN (2004),
+    PARTITION p21 VALUES LESS THAN (2005),
+    PARTITION p22 VALUES LESS THAN (maxvalue)
+    );
+CREATE INDEX stud_e ON students (email);
+INSERT INTO students  (student_no, teacher_no, course_no, student_name, email, birth_date) 
+VALUES 
+(1, 2,'e001','Sadio M','sad1234@gmail.com','2001-12-12'),
+(2, 3,'g001','Soner G ','sa1ah1@hotmail.com','1999-01-30'),
+(3, 4, 'j001','Diego J','di3go@hotmail.com','1986-11-19'),
+(4, 5, 'c001','Rick P','r1ck123@gmail.com','1994-01-01'),
+(5, 7,'t001','Lana D','1ana_d@gmail.com','1992-04-04'),
+(6, 1,'s001','Kate M','ka10n@gmail.com','1989-03-01'),
+(7, 6, 'f001','Anne L','annn007@gmail.com','2003-09-21');
+
+CREATE TABLE teachers (
+teacher_no CHAR(4) NOT NULL PRIMARY KEY,
+teacher_name VARCHAR(30) NOT NULL,
+phone_no VARCHAR(15) NOT NULL);
+
+CREATE UNIQUE INDEX tphone ON teachers(phone_no);
+
+INSERT INTO teachers ( teacher_no, teacher_name,phone_no ) 
+VALUES 
+(1, 'Rosa D','063456476'),
+(2, 'Toma G ','073416765'),
+(3, 'Nina C','063456999'),
+(4, 'Adelin G','097156786'),
+(5, 'Lena R','099456432'),
+(6, 'Katrin S','099868386'),
+(7, 'Natli F','063777473');
+
+CREATE TABLE course(
+course_no CHAR(4) NOT NULL PRIMARY KEY,
+course_name VARCHAR(20) NOT NULL,
+start_date DATE NOT NULL,
+end_date DATE NOT NULL);
+
+INSERT INTO course  (course_no, course_name, start_date, end_date) --2
+VALUES 
+('e001','English','2021-03-30','2021-09-30'),
+('g001','German','2021-04-01','2021-10-01'),
+('j001','Japanese','2021-03-14','2021-11-14'),
+('c001','Chinese','2021-03-05','2022-01-012'),
+('t001','Turkish','2021-03-12','2021-09-15'),
+('s001','Spanish','2021-03-13','2021-10-12'),
+('f001','French','2021-03-23','2021-08-29');
+
+EXPLAIN SELECT * -- 3
+FROM students
+WHERE birth_date BETWEEN '1989-01-01' AND '1989-12-31'; -- '1', 'SIMPLE', 'students', 'p5', 'ALL', NULL, NULL, NULL, NULL, '1', '100.00', 'Using where'
+
+EXPLAIN SELECT * -- 4
+FROM teachers
+WHERE phone_no = '099456432';
+-- 1	SIMPLE	teachers		const	tphone	tphone	62	const	1	100.00
+-- 2  SIMPLE	teachers		ALL					7	14.29	Using where
+-- 3	SIMPLE	teachers		const	tphone	tphone	62	const	1	100.00	
+
+INSERT INTO students  (student_no, teacher_no, course_no, student_name, email, birth_date) 
+VALUES 
+(8, 2,'e001','Sadio M','sad1234@gmail.com','2001-12-12'),
+(9, 2,'e001','Sadio M','sad1234@gmail.com','2001-12-12'),
+(10,2,'e001','Sadio M','sad1234@gmail.com','2001-12-12');
+
