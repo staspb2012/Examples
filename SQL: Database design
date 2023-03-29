@@ -21,7 +21,8 @@ student_name VARCHAR(30) NOT NULL,
 email VARCHAR(20) NOT NULL,
 birth_date DATE NOT NULL,
 CONSTRAINT PK_Person PRIMARY KEY (student_no,birth_date))
-PARTITION BY RANGE (year(birth_date)) ( 
+PARTITION BY RANGE (year(birth_date)) 
+    ( 
     PARTITION p0 VALUES LESS THAN (1985),
     PARTITION p1 VALUES LESS THAN (1986),
     PARTITION p2 VALUES LESS THAN (1987),
