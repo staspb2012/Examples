@@ -8,14 +8,18 @@
   ● Create a unique index on the field teachers.phone_no
 2. At your discretion, add test data (7-10 lines) to our three tables.
 3. Display data for any year from the students table and fix the query execution plan as a comment, where it will be seen that the query will be executed on a specific section.
-4. Display the teacher's data for any one phone number and fix the query execution plan, where it will be seen that the query will be executed by index, and not by the ALL method. Next, make the index from the teachers.phone_no field invisible and fix the query execution plan, where the expected result is the ALL method. As a result, leave the index in the visible status.
+4. Display the teacher's data for any one phone number and fix the query execution plan, where it will be seen that the query will be executed by index, and not by the ALL method. Next, make the index from the teachers.phone_no field invisible and fix the query execution plan,
+   where the expected result is the ALL method. As a result, leave the index in the visible status.
 5. Specially make 3 duplicates in the students table (add 3 more identical rows)
+6. Write a query that displays lines with duplicates.
 
-CREATE DATABASE course;
+CREATE DATABASE course; -- The CREATE DATABASE statement is used to create a new database. In this case, the statement CREATE DATABASE course; is creating a database named "course".
 
-CREATE TABLE students
+CREATE TABLE students -- The CREATE TABLE statement creates a table named "students" with the specified columns and constraints.
+                      -- The student_no column is defined as an auto-incrementing integer and is set as the primary key along with the birth_date column, creating a composite primary key.
+                      -- The table includes columns such as teacher_no, course_no, student_name, email, and birth_date, all with their respective data types and constraints.
 (
-    student_no INT AUTO_INCREMENT NOT NULL,
+    student_no INT AUTO_INCREMENT NOT NULL, 
     teacher_no CHAR(4) NOT NULL ,
     course_no CHAR(4) NOT NULL ,
     student_name VARCHAR(30) NOT NULL,
@@ -23,7 +27,9 @@ CREATE TABLE students
     birth_date DATE NOT NULL,
     CONSTRAINT PK_Person PRIMARY KEY (student_no,birth_date)
 )
-    PARTITION BY RANGE (year(birth_date)) 
+    PARTITION BY RANGE (year(birth_date)) -- The PARTITION BY RANGE statement is used to partition the table based on the birth_date column's year.
+                                          -- The subsequent PARTITION statements define the range values for each partition.
+                                          -- The PARTITION p22 VALUES LESS THAN (MAXVALUE) statement creates a partition for birth dates beyond 2005, allowing for future data.
 ( 
     PARTITION p0 VALUES LESS THAN (1985),
     PARTITION p1 VALUES LESS THAN (1986),
@@ -48,9 +54,11 @@ CREATE TABLE students
     PARTITION p21 VALUES LESS THAN (2005),
     PARTITION p22 VALUES LESS THAN (maxvalue)
 );
-CREATE INDEX stud_e ON students (email);
+CREATE INDEX stud_e ON students (email); -- CREATE INDEX statement creates an index named "stud_e" on the email column to improve query performance when searching or filtering based on email addresses.
 
-INSERT INTO students  (student_no, teacher_no, course_no, student_name, email, birth_date) 
+INSERT INTO students  (student_no, teacher_no, course_no, student_name, email, birth_date) -- The INSERT INTO students statement is inserting multiple rows into the students table. 
+                                                                                           -- Each row represents a student with their respective details such as student number, teacher number, course number, student name, email, and birth date. 
+                                                                                           
 VALUES 
       (1, 2,'e001','Sadio M','sad1234@gmail.com','2001-12-12'),
       (2, 3,'g001','Soner G ','sa1ah1@hotmail.com','1999-01-30'),
@@ -60,16 +68,16 @@ VALUES
       (6, 1,'s001','Kate M','ka10n@gmail.com','1989-03-01'),
       (7, 6, 'f001','Anne L','annn007@gmail.com','2003-09-21');
 
-CREATE TABLE teachers
+CREATE TABLE teachers -- The CREATE TABLE teachers statement is creating a table called teachers with columns for teacher number, teacher name, and phone number. The teacher_no column is specified as the primary key, ensuring uniqueness.
 (
     teacher_no CHAR(4) NOT NULL PRIMARY KEY,
     teacher_name VARCHAR(30) NOT NULL,
     phone_no VARCHAR(15) NOT NULL
 );
 
-CREATE UNIQUE INDEX tphone ON teachers(phone_no);
-
-INSERT INTO teachers ( teacher_no, teacher_name,phone_no ) 
+CREATE UNIQUE INDEX tphone ON teachers(phone_no); -- The CREATE UNIQUE INDEX tphone statement is creating a unique index named tphone on the phone_no column of the teachers table. This index enforces uniqueness for phone numbers in the table.
+--2 
+INSERT INTO teachers ( teacher_no, teacher_name,phone_no ) -- The INSERT INTO teachers statement is inserting multiple rows into the teachers table. Each row represents a teacher with their respective details such as teacher number, teacher name, and phone number.
 VALUES 
       (1, 'Rosa D','063456476'),
       (2, 'Toma G ','073416765'),
@@ -79,7 +87,7 @@ VALUES
       (6, 'Katrin S','099868386'),
       (7, 'Natli F','063777473');
 
-CREATE TABLE course
+CREATE TABLE course -- The CREATE TABLE course statement is creating a table called course with columns for course number, course name, start date, and end date. The course_no column is specified as the primary key, ensuring uniqueness.
 (
     course_no CHAR(4) NOT NULL PRIMARY KEY,
     course_name VARCHAR(20) NOT NULL,
@@ -87,7 +95,8 @@ CREATE TABLE course
     end_date DATE NOT NULL
 );
 
-INSERT INTO course  (course_no, course_name, start_date, end_date) --2
+INSERT INTO course  (course_no, course_name, start_date, end_date) -- The INSERT INTO course statement is inserting multiple rows into the course table.
+                                                                   -- Each row represents a course with its respective details such as course number, course name, start date, and end date.
 VALUES 
       ('e001','English','2021-03-30','2021-09-30'),
       ('g001','German','2021-04-01','2021-10-01'),
@@ -96,30 +105,37 @@ VALUES
       ('t001','Turkish','2021-03-12','2021-09-15'),
       ('s001','Spanish','2021-03-13','2021-10-12'),
       ('f001','French','2021-03-23','2021-08-29');
-
-EXPLAIN SELECT * -- 3
+      
+-- 3
+EXPLAIN SELECT * -- The statement is used to analyze the query execution plan for retrieving students whose birth dates fall within the specified range. 
+                 
 FROM students
 WHERE birth_date BETWEEN '1989-01-01' AND '1989-12-31';
--- '1', 'SIMPLE', 'students', 'p5', 'ALL', NULL, NULL, NULL, NULL, '1', '100.00', 'Using where'
+-- '1', 'SIMPLE', 'students', 'p5', 'ALL', NULL, NULL, NULL, NULL, '1', '100.00', 'Using where' 
+-- The result shows that the query will perform a full table scan (ALL) on the students table and no indexes are utilized. 
 
-EXPLAIN SELECT * -- 4
+-- 4
+EXPLAIN SELECT *  -- The statement is used to analyze the query execution plan for retrieving teachers with a specific phone number. 
 FROM teachers
 WHERE phone_no = '099456432';
+-- The result shows that the query will use a constant value lookup (const) on the tphone index, which is an efficient way to retrieve a single row matching the phone number.
 -- 1	SIMPLE	teachers		const	tphone	tphone	62	const	1	100.00
 -- 2  SIMPLE	teachers		ALL					7	14.29	Using where
 -- 3	SIMPLE	teachers		const	tphone	tphone	62	const	1	100.00	
 https://prnt.sc/S67etjHPBCIe
 https://prnt.sc/6fF1N_Oghqru
-INSERT INTO students  (student_no, teacher_no, course_no, student_name, email, birth_date) -- 5
+-- 5
+INSERT INTO students  (student_no, teacher_no, course_no, student_name, email, birth_date)  -- The purpose of this INSERT statement is to add multiple records for a student named "Sadio M" with the same details, but with different student numbers.
 VALUES 
       (8, 2,'e001','Sadio M','sad1234@gmail.com','2001-12-12'),
       (9, 2,'e001','Sadio M','sad1234@gmail.com','2001-12-12'),
       (10,2,'e001','Sadio M','sad1234@gmail.com','2001-12-12');
+-- 6      
 SELECT 
   s.* 
 FROM 
   (
-    SELECT 
+    SELECT -- Subquery to select duplicate records based on specific columns
       teacher_no, 
       course_no, 
       student_name, 
@@ -136,10 +152,18 @@ FROM
     HAVING 
       COUNT(*) > 1
   ) AS s1 
-  JOIN students AS s ON (
+  JOIN students AS s ON -- Joining the subquery with the students table to retrieve duplicate records
+  ( 
     s.teacher_no = s1.teacher_no 
     AND s.course_no = s1.course_no 
     AND s.student_name = s1.student_name 
     AND s.email = s1.email 
     AND s.birth_date = s1.birth_date
   );
+-- The outermost query selects all columns (denoted by s.*) from the students table for the duplicate records.
+-- The subquery (s1) selects the columns teacher_no, course_no, student_name, email, and birth_date from the students table.
+-- The subquery groups the records by the selected columns.
+-- The HAVING clause filters out the groups that have a count greater than 1, meaning they have duplicate entries.
+-- The subquery (s1) is aliased as "s1".
+-- The JOIN statement joins the subquery (s1) with the students table (aliased as "s") using the matching conditions on teacher_no, course_no, student_name, email, and birth_date.
+-- The result is a set of rows that represent the duplicate records in the students table based on the specified columns.
