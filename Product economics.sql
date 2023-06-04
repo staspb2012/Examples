@@ -145,76 +145,101 @@ FROM   (
               -- The purpose of this query is to calculate and provide insights into running averages for ARPU, ARPPU, and AOV. These metrics help track the trends and performance of revenue and user-related metrics over time, considering the cumulative data as the date increases.
 -- 5.Separately, we calculate the daily revenue from the orders of new users of our service.
 -- Let's see what share it is in the total revenue from orders of all users - both new and old.
-SELECT date,
-       revenue,
-       new_users_revenue,
-       round(new_users_revenue / revenue * 100, 2) as new_users_revenue_share,
-       100 - round(new_users_revenue / revenue * 100, 2) as old_users_revenue_share
-FROM   (SELECT creation_time::date as date,
+SELECT date, -- The date column from the main query
+       revenue, -- The total revenue per date from the orders table
+       new_users_revenue, -- The revenue from new users based on their start date
+       round(new_users_revenue / revenue * 100, 2) as new_users_revenue_share, -- The percentage of revenue contributed by new users
+       100 - round(new_users_revenue / revenue * 100, 2) as old_users_revenue_share -- The percentage of revenue contributed by old users
+FROM   
+(
+       SELECT creation_time::date as date,
                sum(price) as revenue
-        FROM   (SELECT order_id,
+        FROM   (
+               SELECT order_id,
                        creation_time,
                        unnest(product_ids) as product_id
                 FROM   orders
                 WHERE  order_id not in (SELECT order_id
                                         FROM   user_actions
-                                        WHERE  action = 'cancel_order')) t3
+                                        WHERE  action = 'cancel_order')
+                ) t3 -- This subquery retrieves the order_id, creation_time, and product_id from the orders table.It excludes canceled orders based on the condition order_id not in (SELECT order_id FROM user_actions WHERE action = 'cancel_order').The results are aliased as t3.
             LEFT JOIN products using (product_id)
-        GROUP BY date) t1
-    LEFT JOIN (SELECT start_date as date,
-                      sum(revenue) as new_users_revenue
-               FROM   (SELECT t5.user_id,
-                              t5.start_date,
-                              coalesce(t6.revenue, 0) as revenue
-                       FROM   (SELECT user_id,
+        GROUP BY date
+) t1 -- This subquery builds on the previous subquery (t3) by joining with the products table using the product_id.It groups the data by the creation_time (converted to date using creation_time::date) and calculates the sum of price as the total revenue.The results are aliased as t1.
+LEFT JOIN  (
+            SELECT start_date as date,
+                   sum(revenue) as new_users_revenue
+            FROM (
+                  SELECT t5.user_id,
+                         t5.start_date,
+                         coalesce(t6.revenue, 0) as revenue
+                   FROM  (
+                          SELECT user_id,
                                       min(time::date) as start_date
-                               FROM   user_actions
-                               GROUP BY user_id) t5
-                           LEFT JOIN (SELECT user_id,
-                                             date,
-                                             sum(order_price) as revenue
-                                      FROM   (SELECT user_id,
-                                                     time::date as date,
-                                                     order_id
-                                              FROM   user_actions
-                                              WHERE  order_id not in (SELECT order_id
-                                                                      FROM   user_actions
-                                                                      WHERE  action = 'cancel_order')) t7
-                                          LEFT JOIN (SELECT order_id,
-                                                            sum(price) as order_price
-                                                     FROM   (SELECT order_id,
-                                                                    unnest(product_ids) as product_id
-                                                             FROM   orders
-                                                             WHERE  order_id not in (SELECT order_id
-                                                                                     FROM   user_actions
-                                                                                     WHERE  action = 'cancel_order')) t9
-                                                         LEFT JOIN products using (product_id)
-                                                     GROUP BY order_id) t8 using (order_id)
-                                      GROUP BY user_id, date) t6
-                               ON t5.user_id = t6.user_id and
-                                  t5.start_date = t6.date) t4
-               GROUP BY start_date) t2 using (date)
-               
+                           FROM   user_actions
+                           GROUP BY user_id
+                         ) t5 -- This subquery retrieves the user_id and the minimum time::date as the start_date from the user_actions table. It groups the data by user_id. The results are aliased as t5.
+                 LEFT JOIN (
+                           SELECT user_id,
+                                  date,
+                                  sum(order_price) as revenue
+                           FROM (
+                                 SELECT user_id,
+                                        time::date as date,
+                                        order_id
+                                 FROM   user_actions
+                                 WHERE  order_id not in (SELECT order_id
+                                                         FROM   user_actions
+                                                         WHERE  action = 'cancel_order')
+                                ) t7 -- This subquery retrieves the user_id, time::date as date, and order_id from the user_actions table.It excludes canceled orders based on the condition order_id not in (SELECT order_id FROM user_actions WHERE action = 'cancel_order').The results are aliased as t7.
+                                LEFT JOIN (
+                                           SELECT order_id,
+                                                  sum(price) as order_price
+                                           FROM (
+                                                 SELECT order_id,
+                                                    unnest(product_ids) as product_id
+                                                 FROM   orders
+                                                 WHERE  order_id not in (SELECT order_id
+                                                                         FROM   user_actions
+                                                                         WHERE  action = 'cancel_order'
+                                                ) t9 -- This subquery retrieves the order_id and product_id from the orders table.It excludes canceled orders based on the condition order_id not in (SELECT order_id FROM user_actions WHERE action = 'cancel_order').The results are aliased as t9.
+                                                LEFT JOIN products using (product_id)
+                                           GROUP BY order_id
+                                       ) t8 using (order_id) -- This subquery builds on the previous subquery (t9) by joining with the products table using the product_id.It groups the data by order_id and calculates the sum of price as order_price.The results are aliased as t8.
+                           GROUP BY user_id, date
+                        ) t6 ON t5.user_id = t6.user_id and t5.start_date = t6.date 
+                ) t4 -- This subquery joins the previous subquery t5 with the subquery t6 on user_id and start_date. It retrieves the user_id, start_date, and revenue, which represents the revenue from new users based on their start date. The coalesce function is used to handle cases where there is no revenue for a specific user and date combination, setting it to 0. The results are aliased as t4.                  
+           GROUP BY start_date -- Groups the data by the start_date
+) t2 using (date) -- Joins the main query with the subquery t2 using the date column
+        
+      
 -- Let's see which products are in the greatest demand and bring us the main income.
 SELECT product_name,
        sum(revenue) as revenue,
        sum(share_in_revenue) as share_in_revenue
-FROM   (SELECT case when round(100 * revenue / sum(revenue) OVER (), 2) >= 0.5 then name
+FROM   (
+        SELECT case when round(100 * revenue / sum(revenue) OVER (), 2) >= 0.5 then name
                     else 'ДРУГОЕ' end as product_name,
                revenue,
                round(100 * revenue / sum(revenue) OVER (), 2) as share_in_revenue
-        FROM   (SELECT name,
+        FROM   (
+               SELECT name,
                        sum(price) as revenue
                 FROM   (SELECT order_id,
                                unnest(product_ids) as product_id
                         FROM   orders
                         WHERE  order_id not in (SELECT order_id
                                                 FROM   user_actions
-                                                WHERE  action = 'cancel_order')) t1
-                    LEFT JOIN products using(product_id)
-                GROUP BY name) t2) t3
-GROUP BY product_name
-ORDER BY revenue desc
+                                                WHERE  action = 'cancel_order')
+                 ) t1 -- -- This subquery retrieves the order_id and unnested product_id from the orders table.It excludes canceled orders based on the condition order_id not in (SELECT order_id FROM user_actions WHERE action = 'cancel_order').The results are aliased as t1.
+                 LEFT JOIN products using(product_id) - This join links the product_id from t1 with the product_id in the products table. The results are aliased as t2.
+                 GROUP BY name -- This groups the data by the product name and calculates the sum of the price as revenue. The results are aliased as t2.
+                 ) t2
+       ) t3
+GROUP BY product_name -- This groups the data by the product name.
+ORDER BY revenue desc -- This sorts the result by revenue in descending order.
+                      -- The purpose of this query is to calculate the revenue and share of revenue for each product. The result is grouped by product_name and ordered by revenue in descending order. 
+        
 -- Let us take into account the costs with taxes in our calculations and calculate the gross profit,
 -- that is, the amount that we actually received as a result of the sale of goods for the period under review.
 --1. Revenue received on that day.
