@@ -211,7 +211,7 @@ LEFT JOIN  (
                 ) t4 -- This subquery joins the previous subquery t5 with the subquery t6 on user_id and start_date. It retrieves the user_id, start_date, and revenue, which represents the revenue from new users based on their start date. The coalesce function is used to handle cases where there is no revenue for a specific user and date combination, setting it to 0. The results are aliased as t4.                  
            GROUP BY start_date -- Groups the data by the start_date
 ) t2 using (date) -- Joins the main query with the subquery t2 using the date column
-        
+                  -- The query provides insights into the revenue generated per date and the contributions of new and old users to the total revenue.
       
 -- Let's see which products are in the greatest demand and bring us the main income.
 SELECT product_name,
@@ -253,48 +253,91 @@ ORDER BY revenue desc -- This sorts the result by revenue in descending order.
 --9. The share of gross profit in the proceeds for this day (the share of item 4 in item 1).
 --10.The share of the total gross profit in the total revenue for the current day (the share of clause 8 in clause 5).
 --When calculating VAT, keep in mind that for some goods the tax is 10%, not 20%. List of goods with reduced VAT:
-with main as (SELECT date,
-                     revenue,
-                     costs
-              FROM   (SELECT DISTINCT date,
-                                      sum(price) OVER (PARTITION BY date) as revenue
-                      FROM   (SELECT order_id,
-                                     creation_time::date as date ,
-                                     unnest(product_ids) as product_id
-                              FROM   orders
-                              WHERE  order_id not in (SELECT order_id
-                                                      FROM   user_actions
-                                                      WHERE  action = 'cancel_order')) as price_o
-                          LEFT JOIN products using(product_id)) as reven
-                  LEFT JOIN (SELECT date,
-                                    costs_by_day+costs1 as costs FROM(SELECT date,
-                                                                      case when date_part('month', date) = 8 then (c_ord*140)+120000
-                                                                           when date_part('month', date) != 8 then (c_ord*115)+150000 end costs_by_day
-                                                               FROM   (SELECT creation_time::date as date,
-                                                                              count(distinct order_id) as c_ord
-                                                                       FROM   orders
-                                                                       WHERE  order_id not in (SELECT order_id
-                                                                                               FROM   user_actions
-                                                                                               WHERE  action = 'cancel_order')
-                                                                       GROUP BY creation_time::date) as by_day) as by_d
-                                 LEFT JOIN (SELECT DISTINCT date,
-                                                            sum(costs2) OVER (PARTITION BY date) as costs1
-                                            FROM   (SELECT date,
-                                                           count_or,
-                                                           case when date_part('month', date) = 8 and
-                                                                     count_or >= 5 then (count_or*150)+400
-                                                                when date_part('month', date) = 8 and
-                                                                     count_or < 5 then (count_or*150)
-                                                                when date_part('month', date) != 8 and
-                                                                     count_or >= 5 then (count_or*150)+500
-                                                                when date_part('month', date) != 8 and
-                                                                     count_or < 5 then (count_or*150) end costs2
-                                                    FROM   (SELECT DISTINCT time::date as date,
-                                                                            courier_id,
-                                                                            count(order_id) as count_or
-                                                            FROM   courier_actions
-                                                            WHERE  action = 'deliver_order'
-                                                               and order_id not in (SELECT order_id
-                                                                                 FROM   user_actions
-                                                                                 WHERE  action = 'cancel_order')
-                                                            GROUP BY time::date, courier_id) as cost_courier                 
+SELECT date,
+       revenue,
+       costs,
+       tax,
+       gross_profit,
+       total_revenue,
+       total_costs,
+       total_tax,
+       total_gross_profit,
+       round(gross_profit / revenue * 100, 2) as gross_profit_ratio,
+       round(total_gross_profit / total_revenue * 100, 2) as total_gross_profit_ratio
+FROM   (SELECT date, -- The date column from the main query.
+               revenue, -- The revenue received on that day from the orders table.
+               costs, -- The costs calculated based on the month using conditional expressions.
+               tax, -- The tax amount calculated based on the product name and price.
+               revenue - costs - tax as gross_profit, -- The gross profit for that day, calculated as revenue minus costs and tax.
+               sum(revenue) OVER (ORDER BY date) as total_revenue, -- The cumulative total revenue up to that day, calculated as the sum of revenue ordered by date.
+               sum(costs) OVER (ORDER BY date) as total_costs, -- The cumulative total costs up to that day, calculated as the sum of costs ordered by date.
+               sum(tax) OVER (ORDER BY date) as total_tax, -- The cumulative total tax up to that day, calculated as the sum of tax ordered by date.
+               sum(revenue - costs - tax) OVER (ORDER BY date) as total_gross_profit -- The cumulative total gross profit up to that day, calculated as the sum of gross_profit ordered by date.
+        FROM   (SELECT date,
+                       orders_packed,
+                       orders_delivered,
+                       couriers_count,
+                       revenue,
+                       case when date_part('month', date) = 8 then 120000 + 140 * coalesce(orders_packed, 0) + 150 * coalesce(orders_delivered, 0) + 400 * coalesce(couriers_count, 0)
+                            when date_part('month', date) = 9 then 150000 + 115 * coalesce(orders_packed, 0) + 150 * coalesce(orders_delivered, 0) + 500 * coalesce(couriers_count, 0) end as costs,
+                       tax
+                FROM   (SELECT creation_time::date as date,
+                               count(distinct order_id) as orders_packed,
+                               sum(price) as revenue,
+                               sum(tax) as tax
+                        FROM   (
+                               SELECT order_id,
+                                      creation_time,
+                                      product_id,
+                                      name,
+                                      price,
+                                      case when name in ('сахар', 'сухарики', 'сушки', 'семечки', 'масло льняное', 'виноград', 'масло оливковое', 
+                                                          'арбуз', 'батон', 'йогурт', 'сливки', 'гречка', 'овсянка', 'макароны', 'баранина', 'апельсины',
+                                                          'бублики', 'хлеб', 'горох', 'сметана', 'рыба копченая', 'мука', 'шпроты', 'сосиски', 'свинина', 'рис',
+                                                          'масло кунжутное', 'сгущенка', 'ананас', 'говядина', 'соль', 'рыба вяленая', 'масло подсолнечное', 'яблоки',
+                                                          'груши', 'лепешка', 'молоко', 'курица', 'лаваш', 'вафли', 'мандарины') then round(price/110*10,  
+                                            else round(price/120*20, 2) 
+                                       end as tax
+                                FROM   (
+                                       SELECT order_id,
+                                              creation_time,
+                                              unnest(product_ids) as product_id
+                                        FROM  orders
+                                        WHERE order_id not in (SELECT order_id
+                                                                FROM   user_actions
+                                                                WHERE  action = 'cancel_order')
+                                         ) t1 -- The subquery that retrieves order and product IDs from the "orders" table where action is 'cancel_order'.
+                                  LEFT JOIN products using (product_id)
+                                  ) t2 -- The subquery that joins the order and product information from t1 with the "products" table to calculate tax.
+                        GROUP BY date
+                               ) t3 -- The subquery that groups the data from t2 by date and calculates revenue, tax, and other aggregated values.
+                    LEFT JOIN (
+                               SELECT time::date as date,
+                                      count(distinct order_id) as orders_delivered
+                               FROM   courier_actions
+                               WHERE  order_id not in (SELECT order_id
+                                                       FROM   user_actions
+                                                       'cancel_order')
+                                      and action = 'deliver_order'
+                               GROUP BY date
+                              ) t4 using (date) -- The subquery that retrieves the count of delivered orders for each date from the "courier_actions" table, excluding canceled orders.
+                    LEFT JOIN (
+                               SELECT date,
+                                      count(courier_id) as couriers_count
+                               FROM   (
+                                      SELECT time::date as date,
+                                              courier_id,
+                                              count(distinct order_id) as orders_delivered
+                                       FROM   courier_actions
+                                       WHERE  order_id not in (SELECT order_id
+                                                               FROM   user_actions
+                                                               WHERE  action = 'cancel_order')
+                                          and action = 'deliver_order'
+                                       GROUP BY date, courier_id having count(distinct order_id) >= 5
+                                       ) t5 -- The subquery that groups the data from t4 by date and courier_id, and calculates the count of distinct orders delivered by each courier on each date, considering only those couriers with at least 5 delivered orders.
+                                GROUP BY date
+                               ) t6 using (date) -- The subquery that groups the data from t5 by date and calculates the count of couriers with at least 5 delivered orders for each date.
+                    ) t7 -- The subquery that joins the data from t3, t4, and t6 based on the date column to combine all the calculated values for each date.
+            ) t8 -- The subquery that calculates additional financial metrics by subtracting costs and tax from revenue and applying window functions to calculate running totals for revenue, costs, tax, and gross profit over dates.
+                 -- Each alias is assigned to a specific subquery to organize and reference the intermediate results in a more readable and manageable manner.
+                 -- In summary, the query provides information about revenue, costs, tax, gross profit, and cumulative totals for each day. The calculations consider the month of the date to determine the costs and apply different tax rates based on the product name.
