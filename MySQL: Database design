@@ -131,27 +131,21 @@ VALUES
       (9, 2,'e001','Sadio M','sad1234@gmail.com','2001-12-12'),
       (10,2,'e001','Sadio M','sad1234@gmail.com','2001-12-12');
 -- 6      
-SELECT 
-  s.* 
-FROM 
-  (
-    SELECT -- Subquery to select duplicate records based on specific columns
-      teacher_no, 
-      course_no, 
-      student_name, 
-      email, 
-      birth_date 
-    FROM 
-      students 
-    GROUP BY 
-      teacher_no, 
-      course_no, 
-      student_name, 
-      email, 
-      birth_date 
-    HAVING 
-      COUNT(*) > 1
-  ) AS s1 
+SELECT s.* -- Selecting all columns from the students table for the duplicate records
+FROM (
+      SELECT teacher_no, -- Subquery to select duplicate records based on specific columns
+             course_no, 
+             student_name, 
+             email, 
+             birth_date 
+      FROM students 
+      GROUP BY teacher_no, 
+               course_no, 
+               student_name, 
+               email, 
+               birth_date 
+      HAVING COUNT(*) > 1
+     ) AS s1 -- Alias for the subquery to select duplicate records
   JOIN students AS s ON -- Joining the subquery with the students table to retrieve duplicate records
   ( 
     s.teacher_no = s1.teacher_no 
@@ -160,7 +154,9 @@ FROM
     AND s.email = s1.email 
     AND s.birth_date = s1.birth_date
   );
--- The outermost query selects all columns (denoted by s.*) from the students table for the duplicate records.
+-- Explanation:
+
+-- The outermost query selects all columns (s.*) from the students table for the duplicate records.
 -- The subquery (s1) selects the columns teacher_no, course_no, student_name, email, and birth_date from the students table.
 -- The subquery groups the records by the selected columns.
 -- The HAVING clause filters out the groups that have a count greater than 1, meaning they have duplicate entries.
